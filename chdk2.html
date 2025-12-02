@@ -1,0 +1,3702 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>机器人物联网云控系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <style>
+      /* 路径规划样式 */
+      #path-planning-canvas {
+        background: #1a202c;
+        border: 2px solid #2d3748;
+        border-radius: 8px;
+        cursor: crosshair;
+      }
+
+      .path-planning-tab .map-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+
+      .map-control-btn.active {
+        background: #4299e1;
+        border-color: #4299e1;
+      }
+
+      .map-control-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .point-list {
+        background: #2d3748;
+        border-radius: 5px;
+        overflow-y: auto;
+      }
+
+      .point-list ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      .point-list li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 15px;
+        border-bottom: 1px solid #4a5568;
+      }
+
+      .point-list li:last-child {
+        border-bottom: none;
+      }
+
+      .point-info {
+        flex: 1;
+      }
+
+      .point-actions button {
+        background: #e53e3e;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+
+      .point-actions button:hover {
+        background: #c53030;
+      }
+
+      .map-toolbar {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 10px;
+        border-radius: 5px;
+      }
+
+      .map-toolbar button {
+        background: #4299e1;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        margin: 2px;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+
+      .map-toolbar button:hover {
+        background: #3182ce;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      body {
+        background: linear-gradient(135deg, #0d1b2a, #1b263b);
+        color: #fff;
+        min-height: 100vh;
+        padding: 20px;
+        overflow-x: hidden;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 20px;
+        padding: 15px;
+        background: rgba(16, 42, 67, 0.8);
+        border-radius: 15px;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.25);
+      }
+
+      .header h1 {
+        font-size: 2.2rem;
+        color: #4d9be6;
+        text-shadow: 0 0 10px rgba(77, 155, 230, 0.3);
+        letter-spacing: 1px;
+      }
+
+      .header p {
+        font-size: 1rem;
+        opacity: 0.8;
+        margin-top: 8px;
+      }
+
+      .connection-status {
+        display: flex;
+        justify-content: center;
+        margin-top: 12px;
+        font-weight: 500;
+      }
+
+      .status-dot {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #00c853;
+        box-shadow: 0 0 10px #00c853;
+        margin-right: 10px;
+        margin-top: 5px;
+      }
+
+      .container {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 20px;
+        height: calc(100vh - 150px);
+        max-width: 1800px;
+        margin: 0 auto;
+      }
+
+      /* 左侧导航 */
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        height: 100%;
+        overflow-y: auto;
+        padding-right: 5px;
+      }
+
+      .sidebar::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .sidebar::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.1);
+        border-radius: 3px;
+      }
+
+      .sidebar::-webkit-scrollbar-thumb {
+        background: rgba(100, 181, 246, 0.5);
+        border-radius: 3px;
+      }
+
+      .control-section {
+        background: rgba(16, 42, 67, 0.8);
+        border-radius: 15px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        padding: 20px;
+        backdrop-filter: blur(4px);
+        border: 1px solid rgba(66, 133, 244, 0.15);
+      }
+
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .section-header h2 {
+        font-size: 1.4rem;
+        color: #64b5f6;
+      }
+
+      .section-header .actions button {
+        background: rgba(66, 133, 244, 0.2);
+        border: none;
+        color: #fff;
+        padding: 6px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-left: 10px;
+        font-size: 0.85rem;
+      }
+
+      .section-header .actions button:hover {
+        background: rgba(66, 133, 244, 0.4);
+      }
+
+      /* 方向控制 */
+      .joystick-container {
+        background: rgba(21, 48, 77, 0.5);
+        border-radius: 12px;
+        padding: 15px;
+        text-align: center;
+      }
+
+      #directional-buttons {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .control-btn {
+        height: 70px;
+        border-radius: 10px;
+        background: rgba(41, 98, 255, 0.12);
+        border: 1px solid rgba(66, 133, 244, 0.2);
+        color: #fff;
+        font-size: 1.4rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .control-btn:hover {
+        background: rgba(41, 98, 255, 0.25);
+        transform: translateY(-2px);
+      }
+
+      .control-btn:active {
+        transform: translateY(0);
+      }
+
+      #btn-forward {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
+      #btn-left {
+        grid-column: 1;
+        grid-row: 2;
+      }
+
+      #btn-right {
+        grid-column: 3;
+        grid-row: 2;
+      }
+
+      #btn-back {
+        grid-column: 2;
+        grid-row: 3;
+      }
+
+      #btn-rotate-left {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      #btn-rotate-right {
+        grid-column: 3;
+        grid-row: 1;
+      }
+
+      #btn-stop {
+        grid-column: 2;
+        grid-row: 2;
+        background: rgba(224, 44, 44, 0.3);
+      }
+
+      #btn-stop:hover {
+        background: rgba(224, 44, 44, 0.5);
+      }
+
+      /* 速度控制 */
+      .speed-control {
+        background: rgba(21, 48, 77, 0.5);
+        border-radius: 12px;
+        padding: 15px;
+        margin-top: 20px;
+      }
+
+      .speed-wrapper {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .speed-display {
+        font-size: 1.5rem;
+        text-align: center;
+        margin: 15px 0;
+        font-weight: 600;
+      }
+
+      .speed-display .value {
+        color: #76ff03;
+        font-size: 2rem;
+      }
+
+      .speed-slider {
+        width: 100%;
+        margin: 15px 0;
+        -webkit-appearance: none;
+        height: 8px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.08);
+        outline: none;
+      }
+
+      .speed-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #4285f4;
+        cursor: pointer;
+        box-shadow: 0 0 8px rgba(66, 133, 244, 0.8);
+      }
+
+      /* 安全控制面板 */
+      .safety-control {
+        background: rgba(21, 48, 77, 0.5);
+        border-radius: 12px;
+        padding: 15px;
+        margin-top: 20px;
+      }
+
+      .emergency-button {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: #e74c3c;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 1rem;
+        cursor: pointer;
+        margin: 0 auto 15px;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
+        border: 3px solid #fff;
+      }
+
+      .emergency-button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 8px 25px rgba(231, 76, 60, 0.6);
+      }
+
+      .emergency-button:active {
+        transform: scale(0.95);
+        background: #c0392b;
+      }
+
+      .emergency-button.active {
+        background: #c0392b;
+        animation: pulse 1.5s infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7);
+        }
+        70% {
+          box-shadow: 0 0 0 15px rgba(231, 76, 60, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(231, 76, 60, 0);
+        }
+      }
+
+      .safety-status {
+        display: flex;
+        justify-content: space-around;
+        margin-top: 15px;
+        flex-wrap: wrap;
+      }
+
+      .safety-status-item {
+        flex: 1;
+        min-width: 120px;
+        margin: 5px;
+        padding: 10px;
+        border-radius: 6px;
+        background: #f8f9fa;
+        text-align: center;
+      }
+
+      .safety-level-normal {
+        background: #d4edda;
+        color: #155724;
+      }
+      .safety-level-warning {
+        background: #fff3cd;
+        color: #856404;
+      }
+      .safety-level-danger {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      .safety-level-emergency {
+        background: #f5b7b1;
+        color: #78281f;
+      }
+
+      /* IMU仪表盘 */
+      .imu-dashboard {
+        background: rgba(21, 48, 77, 0.5);
+        border-radius: 12px;
+        padding: 15px;
+        margin-top: 20px;
+      }
+
+      .imu-container {
+        display: flex;
+        height: 150px;
+        margin-top: 10px;
+      }
+
+      .imu-box {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .imu-value {
+        width: 90px;
+        height: 90px;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 15px;
+        position: relative;
+      }
+
+      .imu-value .label {
+        position: absolute;
+        top: -22px;
+        font-size: 0.85rem;
+        opacity: 0.8;
+      }
+
+      .roll {
+        background: rgba(255, 152, 0, 0.15);
+        color: #ff9800;
+      }
+      .pitch {
+        background: rgba(76, 175, 80, 0.15);
+        color: #4caf50;
+      }
+      .yaw {
+        background: rgba(33, 150, 243, 0.15);
+        color: #2196f3;
+      }
+
+      /* 性能监控 */
+      .performance-monitor {
+        background: rgba(21, 48, 77, 0.5);
+        border-radius: 12px;
+        padding: 15px;
+        margin-top: 20px;
+      }
+
+      .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .metric-item {
+        text-align: center;
+        padding: 10px;
+        background: rgba(10, 25, 47, 0.3);
+        border-radius: 6px;
+      }
+
+      .metric-label {
+        font-size: 0.8em;
+        color: #7f8c8d;
+        margin-bottom: 5px;
+      }
+
+      .metric-value {
+        font-size: 1.1em;
+        font-weight: bold;
+        color: #64b5f6;
+      }
+
+      /* 主内容区 - 标签页 */
+      .main-content {
+        background: rgba(16, 42, 67, 0.8);
+        border-radius: 15px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        display: grid;
+        grid-template-rows: auto 1fr;
+        overflow: hidden;
+      }
+
+      .tabs {
+        display: flex;
+        padding: 0 20px;
+        background: rgba(12, 28, 45, 0.7);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .tab-btn {
+        padding: 14px 24px;
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 1rem;
+        cursor: pointer;
+        position: relative;
+        transition: all 0.3s ease;
+      }
+
+      .tab-btn:hover {
+        color: #64b5f6;
+      }
+
+      .tab-btn.active {
+        color: #4d9be6;
+        font-weight: 600;
+      }
+
+      .tab-btn.active::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: #4d9be6;
+        border-radius: 3px 3px 0 0;
+      }
+
+      /* SLAM地图区域 */
+      .tab-content {
+        display: none;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      .tab-content.active {
+        display: grid;
+        grid-template-rows: auto 1fr 280px;
+        height: 100%;
+      }
+
+      .slam-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px;
+        background: rgba(12, 28, 45, 0.7);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .slam-header h2 {
+        font-size: 1.6rem;
+        color: #64b5f6;
+      }
+
+      .map-controls {
+        display: flex;
+        gap: 15px;
+      }
+
+      .map-control-btn {
+        background: rgba(66, 133, 244, 0.2);
+        border: none;
+        color: #fff;
+        padding: 8px 15px;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .map-control-btn:hover {
+        background: rgba(66, 133, 244, 0.4);
+      }
+
+      .map-actions {
+        display: flex;
+        gap: 10px;
+        margin-left: 20px;
+      }
+
+      .map-container {
+        position: relative;
+        background: #091a2f;
+        overflow: hidden;
+        height: 100%;
+      }
+
+      #slam-map-canvas {
+        width: 100%;
+        height: 100%;
+        background: #091a2f;
+        cursor: crosshair;
+      }
+
+      /* 导航点控制区 */
+      .navigation-section {
+        padding: 15px;
+        background: rgba(12, 28, 45, 0.7);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .nav-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+
+      .point-list {
+        height: 190px;
+        overflow-y: auto;
+        background: rgba(10, 25, 47, 0.3);
+        border-radius: 10px;
+        padding: 10px;
+      }
+
+      .point-list ul {
+        list-style: none;
+      }
+
+      .point-list li {
+        padding: 12px;
+        margin-bottom: 8px;
+        background: rgba(41, 98, 255, 0.1);
+        border-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .point-info {
+        display: flex;
+        gap: 15px;
+      }
+
+      .point-actions {
+        display: flex;
+        gap: 10px;
+      }
+
+      .point-actions button {
+        background: none;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        padding: 4px 8px;
+        cursor: pointer;
+        font-size: 0.85rem;
+      }
+
+      .point-actions button:hover {
+        background: rgba(66, 133, 244, 0.2);
+      }
+
+      /* 任务管理页面 */
+      .task-manager {
+        padding: 20px;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        height: 100%;
+        gap: 20px;
+      }
+
+      .task-form {
+        background: rgba(12, 28, 45, 0.7);
+        border-radius: 12px;
+        padding: 20px;
+      }
+
+      .form-header {
+        margin-bottom: 20px;
+        color: #64b5f6;
+        font-size: 1.4rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .form-row {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 15px;
+      }
+
+      .form-group {
+        flex: 1;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+        opacity: 0.8;
+      }
+
+      .form-group select,
+      .form-group input {
+        width: 100%;
+        padding: 10px;
+        border-radius: 8px;
+        background: rgba(21, 48, 77, 0.5);
+        border: 1px solid rgba(64, 124, 225, 0.3);
+        color: white;
+      }
+
+      .add-btn {
+        background: rgba(66, 133, 244, 0.4);
+        border: none;
+        color: white;
+        padding: 12px 25px;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.3s ease;
+      }
+
+      .add-btn:hover {
+        background: rgba(66, 133, 244, 0.6);
+      }
+
+      .task-list-container {
+        background: rgba(12, 28, 45, 0.7);
+        border-radius: 12px;
+        padding: 20px;
+        overflow-y: auto;
+      }
+
+      .task-list-header {
+        display: grid;
+        grid-template-columns: 1fr 120px 100px 120px 150px 120px;
+        padding: 15px;
+        font-weight: 600;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .task-item {
+        display: grid;
+        grid-template-columns: 1fr 120px 100px 120px 150px 120px;
+        padding: 15px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        transition: background 0.3s ease;
+      }
+
+      .task-item:hover {
+        background: rgba(41, 98, 255, 0.1);
+      }
+
+      .task-id {
+        font-weight: 600;
+        color: #64b5f6;
+      }
+
+      .action-btn {
+        background: none;
+        border: none;
+        color: #64b5f6;
+        cursor: pointer;
+        font-size: 0.9rem;
+      }
+
+      .action-btn:hover {
+        opacity: 0.9;
+        text-decoration: underline;
+      }
+
+      .status-pending {
+        color: #ff9800;
+      }
+
+      .status-in-progress {
+        color: #2196f3;
+      }
+
+      .status-completed {
+        color: #4caf50;
+      }
+
+      .priority-high {
+        color: #f44336;
+        font-weight: 600;
+      }
+
+      .priority-medium {
+        color: #ffc107;
+      }
+
+      .priority-low {
+        color: #64b5f6;
+      }
+
+      .battery-container {
+        margin-top: 20px;
+        background: rgba(21, 48, 77, 0.5);
+        border-radius: 12px;
+        padding: 15px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .battery-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+        color: #64b5f6;
+        gap: 10px;
+      }
+
+      .battery-progress {
+        height: 25px;
+        background: rgba(10, 25, 47, 0.3);
+        border-radius: 12px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .battery-fill {
+        height: 100%;
+        width: 72%;
+        background: linear-gradient(90deg, #00c853, #76ff03);
+        border-radius: 12px 0 0 12px;
+        position: relative;
+      }
+
+      .battery-percentage {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+
+      .battery-stats {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 12px;
+        font-size: 0.9rem;
+      }
+
+      .stat-item div:first-child {
+        opacity: 0.7;
+        margin-bottom: 5px;
+      }
+
+      /* 地图导航点样式 */
+      .map-nav-point {
+        position: absolute;
+        width: 25px;
+        height: 25px;
+        background: #ff4081;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 10px rgba(255, 64, 129, 0.7);
+        border: 2px solid #fff;
+        user-select: none;
+        z-index: 10;
+      }
+
+      .map-nav-point::after {
+        content: "";
+        position: absolute;
+        top: -50px;
+        left: calc(50% - 1.5px);
+        height: 50px;
+        width: 3px;
+        background: #ff4081;
+        z-index: -1;
+      }
+
+      .map-nav-point span {
+        font-weight: bold;
+        font-size: 14px;
+        color: white;
+      }
+
+      /* 坐标显示 */
+      .coordinates-display {
+        position: absolute;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        pointer-events: none;
+        z-index: 100;
+      }
+
+      /* 地图控制面板 */
+      .map-toolbar {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(16, 42, 67, 0.9);
+        border-radius: 8px;
+        padding: 10px;
+        z-index: 50;
+      }
+
+      .map-toolbar button {
+        background: rgba(66, 133, 244, 0.3);
+        border: none;
+        color: white;
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        margin: 2px;
+        font-size: 0.8rem;
+      }
+
+      .map-toolbar button:hover {
+        background: rgba(66, 133, 244, 0.5);
+      }
+
+      /* 安全日志 */
+      .safety-logs {
+        background: #2d2d2d;
+        color: #f8f8f2;
+        padding: 15px;
+        border-radius: 8px;
+        height: 150px;
+        overflow-y: auto;
+        font-family: "Courier New", monospace;
+        font-size: 0.9rem;
+        margin-top: 15px;
+      }
+
+      .safety-logs div {
+        margin-bottom: 5px;
+        padding: 5px 0;
+        border-bottom: 1px solid #444;
+      }
+
+      .log-normal {
+        color: #27ae60;
+      }
+      .log-warning {
+        color: #f39c12;
+      }
+      .log-danger {
+        color: #e74c3c;
+      }
+      .log-emergency {
+        color: #ff6b6b;
+        font-weight: bold;
+      }
+
+      /* 控制优化面板 */
+      .control-optimization {
+        background: rgba(21, 48, 77, 0.5);
+        border-radius: 12px;
+        padding: 15px;
+        margin-top: 20px;
+      }
+
+      .optimization-controls {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 15px;
+      }
+
+      .optimization-controls button {
+        background: rgba(66, 133, 244, 0.3);
+        border: none;
+        color: white;
+        padding: 8px 15px;
+        border-radius: 6px;
+        cursor: pointer;
+        flex: 1;
+      }
+
+      .optimization-controls button:hover {
+        background: rgba(66, 133, 244, 0.5);
+      }
+
+      /* 动画效果 */
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .control-btn,
+      .map-control-btn {
+        animation: fadeIn 0.4s ease forwards;
+      }
+
+      .active {
+        background: rgba(66, 133, 244, 0.4) !important;
+      }
+
+      /* 页面切换动画 */
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateX(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      .tab-content {
+        animation: slideIn 0.3s ease-out;
+      }
+
+      /* 响应式设计 */
+      @media (max-height: 900px) {
+        .container {
+          height: auto;
+          min-height: calc(100vh - 150px);
+        }
+
+        .joystick-container,
+        .speed-control,
+        .imu-dashboard,
+        .battery-container {
+          padding: 12px;
+        }
+
+        .control-btn {
+          height: 60px;
+          font-size: 1.2rem;
+        }
+
+        .imu-container {
+          height: 130px;
+        }
+
+        .imu-value {
+          width: 80px;
+          height: 80px;
+          font-size: 1rem;
+        }
+
+        .speed-display {
+          font-size: 1.3rem;
+          margin: 10px 0;
+        }
+
+        .speed-display .value {
+          font-size: 1.7rem;
+        }
+      }
+
+      @media (max-width: 1400px) {
+        .container {
+          grid-template-columns: 280px 1fr;
+        }
+
+        .control-btn {
+          height: 60px;
+        }
+
+        .imu-container {
+          height: 130px;
+        }
+
+        .imu-value {
+          width: 80px;
+          height: 80px;
+        }
+      }
+
+      @media (max-width: 1200px) {
+        .container {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto 1fr;
+        }
+
+        .sidebar {
+          flex-direction: row;
+          overflow-x: auto;
+          height: auto;
+          padding-bottom: 10px;
+        }
+
+        .control-section {
+          min-width: 300px;
+          flex: 1;
+        }
+
+        .main-content {
+          min-height: 600px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 顶部标题区域 -->
+    <div class="header">
+      <h1><i class="fas fa-robot"></i> 机器人物联网云控系统</h1>
+      <p>基于SLAM技术的自主导航与智能任务管理 - 集成安全控制与性能优化</p>
+      <div class="connection-status">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="connection-text"
+          >系统已连接 - 延迟: 18ms - 系统状态: 正常运行</span
+        >
+      </div>
+    </div>
+
+    <!-- 主内容区域 -->
+    <div class="container">
+      <!-- 左侧控制面板 -->
+      <div class="sidebar">
+        <div class="control-section">
+          <div class="section-header">
+            <h2><i class="fas fa-gamepad"></i> 运动控制</h2>
+            <div class="actions">
+              <button id="btn-switch-mode">
+                <i class="fas fa-exchange-alt"></i> 模式
+              </button>
+            </div>
+            <h2><i class="fas fa-map"></i> SLAM建图控制</h2>
+          </div>
+          <div
+            class="slam-control"
+            style="
+              background: rgba(21, 48, 77, 0.5);
+              border-radius: 12px;
+              padding: 15px;
+              margin-top: 10px;
+            "
+          >
+            <div
+              class="slam-status"
+              style="
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 15px;
+              "
+            >
+              <div>
+                <strong>建图状态:</strong>
+                <span id="slam-status" style="color: #e74c3c">未启动</span>
+              </div>
+              <div>
+                <strong>地图尺寸:</strong>
+                <span id="map-size">0 x 0</span>
+              </div>
+            </div>
+
+            <div
+              class="slam-controls"
+              style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px"
+            >
+              <button
+                class="map-control-btn"
+                onclick="startSLAMMapping()"
+                id="btn-start-slam"
+              >
+                <i class="fas fa-play"></i> 开始建图
+              </button>
+              <button
+                class="map-control-btn"
+                onclick="stopSLAMMapping()"
+                id="btn-stop-slam"
+                disabled
+              >
+                <i class="fas fa-stop"></i> 停止建图
+              </button>
+              <button
+                class="map-control-btn"
+                onclick="saveMap()"
+                id="btn-save-map"
+              >
+                <i class="fas fa-save"></i> 保存地图
+              </button>
+              <button
+                class="map-control-btn"
+                onclick="resetMap()"
+                id="btn-reset-map"
+              >
+                <i class="fas fa-redo"></i> 重置地图
+              </button>
+            </div>
+
+            <div
+              class="slam-stats"
+              style="margin-top: 15px; font-size: 0.9rem; color: #7f8c8d"
+            >
+              <div>已探索区域: <span id="explored-area">0%</span></div>
+              <div>障碍物数量: <span id="obstacle-count">0</span></div>
+              <div>建图时间: <span id="mapping-time">00:00</span></div>
+            </div>
+          </div>
+          <!-- 方向控制区 -->
+          <div class="joystick-container">
+            <div id="directional-buttons">
+              <button class="control-btn" id="btn-rotate-left" title="左旋转">
+                <i class="fas fa-undo-alt"></i>
+              </button>
+              <button
+                class="control-btn direction-btn"
+                id="btn-forward"
+                title="前进"
+              >
+                <i class="fas fa-arrow-up"></i>
+              </button>
+              <button class="control-btn" id="btn-rotate-right" title="右旋转">
+                <i class="fas fa-redo-alt"></i>
+              </button>
+              <button
+                class="control-btn direction-btn"
+                id="btn-left"
+                title="左平移"
+              >
+                <i class="fas fa-arrow-left"></i>
+              </button>
+              <button class="control-btn" id="btn-stop" title="停止">
+                <i class="fas fa-stop"></i>
+              </button>
+              <button
+                class="control-btn direction-btn"
+                id="btn-right"
+                title="右平移"
+              >
+                <i class="fas fa-arrow-right"></i>
+              </button>
+              <button class="control-btn"></button>
+              <button
+                class="control-btn direction-btn"
+                id="btn-back"
+                title="后退"
+              >
+                <i class="fas fa-arrow-down"></i>
+              </button>
+              <button class="control-btn"></button>
+            </div>
+          </div>
+
+          <!-- 速度控制区 -->
+          <div class="speed-control">
+            <h3><i class="fas fa-tachometer-alt"></i> 速度分级控制</h3>
+            <div class="speed-wrapper">
+              <div class="speed-display">
+                当前速度: <span class="value" id="current-speed">0.55</span> m/s
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value="50"
+                class="speed-slider"
+                id="speed-mode-slider"
+              />
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  margin-top: 10px;
+                "
+              >
+                <span style="font-size: 0.8rem; color: #3498db">精密模式</span>
+                <span style="font-size: 0.8rem; color: #27ae60">标准模式</span>
+                <span style="font-size: 0.8rem; color: #e74c3c">高速模式</span>
+              </div>
+              <div style="margin-top: 10px; text-align: center">
+                <span
+                  id="speed-mode-label"
+                  style="color: #27ae60; font-weight: bold"
+                  >标准模式</span
+                >
+                <span>
+                  | 最大速度: <span id="max-speed-value">0.7</span> m/s</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- 安全控制 -->
+          <div class="safety-control">
+            <h3><i class="fas fa-shield-alt"></i> 安全控制</h3>
+            <div class="emergency-button" id="emergency-stop-btn">🛑 急停</div>
+            <div class="safety-status">
+              <div class="safety-status-item" id="safety-level-item">
+                <div>安全状态</div>
+                <div id="safety-level" style="font-weight: bold">正常</div>
+              </div>
+              <div class="safety-status-item">
+                <div>障碍物距离</div>
+                <div id="obstacle-distance" style="font-weight: bold">-- m</div>
+              </div>
+            </div>
+            <div style="margin-top: 15px; text-align: center">
+              <button
+                onclick="toggleEmergencyStop()"
+                id="toggle-emergency-btn"
+                style="background: #e74c3c; width: 100%"
+              >
+                🔄 切换急停状态
+              </button>
+            </div>
+          </div>
+
+          <!-- 性能监控 -->
+          <div class="performance-monitor">
+            <h3><i class="fas fa-chart-bar"></i> 性能监控</h3>
+            <div class="metrics-grid">
+              <div class="metric-item">
+                <div class="metric-label">网络延迟</div>
+                <div class="metric-value" id="network-latency">0.00 ms</div>
+              </div>
+              <div class="metric-item">
+                <div class="metric-label">自适应控制</div>
+                <div class="metric-value" id="adaptive-control">未激活</div>
+              </div>
+              <div class="metric-item">
+                <div class="metric-label">轨迹点数</div>
+                <div class="metric-value" id="trajectory-points">0</div>
+              </div>
+              <div class="metric-item">
+                <div class="metric-label">测试场景</div>
+                <div class="metric-value" id="test-scenario">正常</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 控制优化 -->
+          <div class="control-optimization">
+            <h3><i class="fas fa-cogs"></i> 控制优化</h3>
+            <div class="optimization-controls">
+              <button onclick="startTrajectoryRecord()" id="btn-start-record">
+                <i class="fas fa-record-vinyl"></i> 开始记录
+              </button>
+              <button
+                onclick="stopTrajectoryRecord()"
+                id="btn-stop-record"
+                disabled
+              >
+                <i class="fas fa-stop"></i> 停止记录
+              </button>
+            </div>
+            <div class="optimization-controls">
+              <select
+                id="network-test-select"
+                style="
+                  flex: 2;
+                  padding: 8px;
+                  background: rgba(10, 25, 47, 0.3);
+                  color: white;
+                  border: 1px solid rgba(255, 255, 255, 0.1);
+                  border-radius: 6px;
+                "
+              >
+                <option value="normal">正常网络</option>
+                <option value="latency">高延迟测试</option>
+                <option value="loss">高丢包测试</option>
+              </select>
+              <button onclick="applyNetworkTest()" style="flex: 1">
+                <i class="fas fa-bolt"></i> 应用
+              </button>
+            </div>
+            <div style="text-align: center; margin-top: 10px">
+              <span id="record-status" style="color: #7f8c8d; font-size: 0.9rem"
+                >未记录</span
+              >
+            </div>
+          </div>
+
+          <!-- IMU姿态仪表盘 -->
+          <div class="imu-dashboard">
+            <h3><i class="fas fa-chart-line"></i> IMU姿态监控</h3>
+            <div class="imu-container">
+              <div class="imu-box">
+                <div class="imu-value roll">
+                  <span class="label">ROLL</span>
+                  <div id="roll-value">0.00°</div>
+                </div>
+              </div>
+              <div class="imu-box">
+                <div class="imu-value pitch">
+                  <span class="label">PITCH</span>
+                  <div id="pitch-value">0.00°</div>
+                </div>
+              </div>
+              <div class="imu-box">
+                <div class="imu-value yaw">
+                  <span class="label">YAW</span>
+                  <div id="yaw-value">0.00°</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 电池状态显示 -->
+          <div class="battery-container">
+            <div class="battery-header">
+              <i class="fas fa-battery-full"></i>
+              <h3>电池状态</h3>
+            </div>
+            <div class="battery-progress">
+              <div class="battery-fill" id="battery-fill" style="width: 72%">
+                <div class="battery-percentage">72%</div>
+              </div>
+            </div>
+            <div class="battery-stats">
+              <div class="stat-item">
+                <div>电压</div>
+                <div id="battery-voltage">12.4V</div>
+              </div>
+              <div class="stat-item">
+                <div>状态</div>
+                <div id="battery-status">放电中</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 安全日志 -->
+          <div class="safety-logs" id="safety-logs">
+            <div class="log-normal">[系统] 安全日志初始化完成</div>
+            <div class="log-normal">[系统] 等待安全事件...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧主内容区 -->
+      <div class="main-content">
+        <!-- 标签页 -->
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="map-tab">
+            <i class="fas fa-map-marked-alt"></i> SLAM导航地图
+          </button>
+          <button class="tab-btn" data-tab="path-planning-tab">
+            <i class="fas fa-route"></i> 路径规划
+          </button>
+          <button class="tab-btn" data-tab="task-tab">
+            <i class="fas fa-tasks"></i> 任务管理
+          </button>
+          <button class="tab-btn" data-tab="system-tab">
+            <i class="fas fa-cogs"></i> 系统设置
+          </button>
+        </div>
+        <div id="path-planning-tab" class="tab-content">
+          <div class="slam-header">
+            <h2><i class="fas fa-route"></i> 多目标点路径规划系统</h2>
+            <div class="map-controls">
+              <div class="map-actions">
+                <button class="map-control-btn" id="btn-add-waypoint-mode">
+                  <i class="fas fa-map-marker-alt"></i> 添加路径点
+                </button>
+                <button class="map-control-btn" id="btn-clear-waypoints">
+                  <i class="fas fa-trash-alt"></i> 清空路径点
+                </button>
+                <button class="map-control-btn" id="btn-plan-path">
+                  <i class="fas fa-project-diagram"></i> 规划路径
+                </button>
+              </div>
+
+              <div class="map-actions">
+                <button class="map-control-btn" id="btn-start-path">
+                  <i class="fas fa-play"></i> 开始执行
+                </button>
+                <button class="map-control-btn" id="btn-stop-path">
+                  <i class="fas fa-stop"></i> 停止执行
+                </button>
+                <button class="map-control-btn" id="btn-export-path">
+                  <i class="fas fa-download"></i> 导出路径
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 路径规划地图区域 -->
+          <div class="map-container">
+            <canvas id="path-planning-canvas" width="800" height="500"></canvas>
+            <div class="map-toolbar">
+              <button onclick="pathPlanningSystem.zoomIn()">放大</button>
+              <button onclick="pathPlanningSystem.zoomOut()">缩小</button>
+              <button onclick="pathPlanningSystem.resetView()">重置</button>
+              <div style="color: white; font-size: 0.8rem; margin-top: 5px">
+                缩放: <span id="path-scale-display">1.00</span>x
+              </div>
+            </div>
+          </div>
+
+          <!-- 路径规划控制面板 -->
+          <div class="navigation-section">
+            <div class="nav-header">
+              <h3><i class="fas fa-cogs"></i> 路径规划参数</h3>
+              <div>
+                <span>路径点数量: <span id="waypoint-count">0</span></span>
+              </div>
+            </div>
+
+            <div class="two-columns" style="gap: 20px; margin-top: 15px">
+              <div>
+                <h4>优化算法</h4>
+                <select
+                  id="optimization-method"
+                  style="width: 100%; padding: 8px; margin-bottom: 15px"
+                >
+                  <option value="nearest_neighbor">最近邻算法</option>
+                  <option value="genetic_algorithm">遗传算法</option>
+                </select>
+
+                <h4>平滑方法</h4>
+                <select id="smoothing-method" style="width: 100%; padding: 8px">
+                  <option value="linear">线性插值</option>
+                  <option value="bezier">贝塞尔曲线</option>
+                  <option value="cubic_spline" selected>三次样条</option>
+                </select>
+              </div>
+
+              <div>
+                <h4>执行状态</h4>
+                <div
+                  id="path-execution-status"
+                  style="
+                    background: #2d3748;
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin-bottom: 15px;
+                  "
+                >
+                  <div>状态: <span style="color: #e74c3c">未开始</span></div>
+                  <div>
+                    进度: <span id="path-progress">0</span>/<span
+                      id="path-total"
+                      >0</span
+                    >
+                  </div>
+                </div>
+
+                <button
+                  class="map-control-btn"
+                  id="btn-load-demo"
+                  style="width: 100%"
+                >
+                  <i class="fas fa-magic"></i> 加载演示路径
+                </button>
+              </div>
+            </div>
+
+            <div class="point-list" style="height: 150px; margin-top: 15px">
+              <ul id="path-waypoints-list">
+                <div style="text-align: center; color: #7f8c8d; padding: 20px">
+                  暂无路径点，点击地图添加路径点
+                </div>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLAM地图页 -->
+        <div id="map-tab" class="tab-content active">
+          <!-- SLAM标题栏 -->
+          <div class="slam-header">
+            <h2>
+              <i class="fas fa-map-marked-alt"></i> SLAM实时建图与环境导航
+            </h2>
+            <div class="map-controls">
+              <div class="map-actions">
+                <button class="map-control-btn" id="btn-start-slam">
+                  <i class="fas fa-play"></i> 开始建图
+                </button>
+                <button class="map-control-btn" id="btn-stop-slam">
+                  <i class="fas fa-stop"></i> 停止建图
+                </button>
+                <button class="map-control-btn" id="btn-save-map">
+                  <i class="fas fa-save"></i> 保存地图
+                </button>
+              </div>
+
+              <div class="map-actions">
+                <button class="map-control-btn" id="btn-rm-points">
+                  <i class="fas fa-trash-alt"></i> 清除所有点
+                </button>
+                <button class="map-control-btn" id="btn-start-nav">
+                  <i class="fas fa-rocket"></i> 开始导航
+                </button>
+                <button class="map-control-btn" onclick="resetSafetySystem()">
+                  <i class="fas fa-redo"></i> 重置安全
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- SLAM地图区域 -->
+          <div class="map-container">
+            <canvas id="slam-map-canvas" width="800" height="600"></canvas>
+            <div
+              id="coordinates-display"
+              class="coordinates-display"
+              style="display: none"
+            ></div>
+            <div class="map-toolbar">
+              <button onclick="mapSystem.zoomIn()">放大</button>
+              <button onclick="mapSystem.zoomOut()">缩小</button>
+              <button onclick="mapSystem.resetView()">重置</button>
+              <button onclick="mapSystem.toggleGrid()">网格</button>
+              <div style="color: white; font-size: 0.8rem; margin-top: 5px">
+                缩放: <span id="scale-display">1.00</span>x
+              </div>
+            </div>
+          </div>
+
+          <!-- 导航点控制区 -->
+          <div class="navigation-section">
+            <div class="nav-header">
+              <h3><i class="fas fa-location-dot"></i> 导航点管理</h3>
+              <div>
+                <button class="map-control-btn" id="btn-show-path">
+                  <i class="fas fa-route"></i> 显示路径
+                </button>
+                <button
+                  class="map-control-btn"
+                  onclick="mapSystem.saveWaypoints()"
+                >
+                  <i class="fas fa-save"></i> 保存
+                </button>
+                <button
+                  class="map-control-btn"
+                  onclick="mapSystem.loadWaypoints()"
+                >
+                  <i class="fas fa-download"></i> 加载
+                </button>
+              </div>
+            </div>
+
+            <div class="point-list">
+              <ul id="nav-points-list">
+                <!-- 导航点将由JS动态生成 -->
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- 任务管理页 -->
+        <div id="task-tab" class="tab-content">
+          <div class="task-manager">
+            <!-- 任务创建表单 -->
+            <div class="task-form">
+              <div class="form-header">
+                <i class="fas fa-plus-circle"></i>
+                <h3>创建新任务</h3>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label>任务类型</label>
+                  <select id="task-type">
+                    <option value="">-- 选择任务类型 --</option>
+                    <option value="charge">前往充电站</option>
+                    <option value="inspection">巡检区域A</option>
+                    <option value="transport">运送物品到B</option>
+                    <option value="monitoring">环境监测</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label>目标坐标</label>
+                  <input
+                    type="text"
+                    id="task-coord"
+                    placeholder="输入坐标 x,y"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label>优先级</label>
+                  <select id="task-priority">
+                    <option value="high">高</option>
+                    <option value="medium">中</option>
+                    <option value="low" selected>低</option>
+                  </select>
+                </div>
+              </div>
+
+              <button class="add-btn" id="btn-add-task">
+                <i class="fas fa-plus"></i> 添加任务
+              </button>
+            </div>
+
+            <!-- 任务列表 -->
+            <div class="task-list-container">
+              <div class="task-list-header">
+                <div>任务名称</div>
+                <div>类型</div>
+                <div>坐标</div>
+                <div>优先级</div>
+                <div>状态</div>
+                <div>操作</div>
+              </div>
+
+              <div class="task-list">
+                <div class="task-item">
+                  <div class="task-id">T-1001 | 前往充电站</div>
+                  <div>充电</div>
+                  <div>(3.2, 2.5)</div>
+                  <div class="priority-high">高</div>
+                  <div class="status-in-progress">进行中</div>
+                  <div>
+                    <button class="action-btn">
+                      <i class="fas fa-check"></i> 完成
+                    </button>
+                    <button class="action-btn">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="task-item">
+                  <div class="task-id">T-1002 | 巡检区域A</div>
+                  <div>巡检</div>
+                  <div>(5.7, 4.1)</div>
+                  <div class="priority-medium">中</div>
+                  <div class="status-pending">待执行</div>
+                  <div>
+                    <button class="action-btn">
+                      <i class="fas fa-play"></i> 执行
+                    </button>
+                    <button class="action-btn">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 系统设置页 -->
+        <div id="system-tab" class="tab-content">
+          <div style="padding: 20px; text-align: center">
+            <h2 style="margin-bottom: 20px; color: #64b5f6">系统设置</h2>
+            <div
+              style="
+                background: rgba(12, 28, 45, 0.7);
+                border-radius: 12px;
+                padding: 30px;
+              "
+            >
+              <p style="margin-bottom: 30px; opacity: 0.8">
+                高级系统设置将在后续版本开放
+              </p>
+              <div
+                style="
+                  font-size: 5rem;
+                  color: rgba(100, 181, 246, 0.3);
+                  margin-bottom: 30px;
+                "
+              >
+                <i class="fas fa-cogs"></i>
+              </div>
+              <p>当前系统版本: v2.5.1</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ==================== 系统核心功能 ====================
+
+      // Socket.IO 连接
+      const socket = io();
+
+      // 系统状态变量
+      let emergencyActive = false;
+      let currentSpeedLevel = 2;
+      let isRecordingTrajectory = false;
+      let trajectoryPoints = [];
+      let safetyData = {};
+      // SLAM建图控制功能
+      let slamMappingActive = false;
+      let mappingStartTime = 0;
+      let mappingTimer = null;
+
+      // 速度级别配置
+      const speedLevels = {
+        1: { label: "精密模式", maxSpeed: 0.3, color: "#3498db" },
+        2: { label: "标准模式", maxSpeed: 0.7, color: "#27ae60" },
+        3: { label: "高速模式", maxSpeed: 1.0, color: "#e74c3c" },
+      };
+
+      // ==================== Socket.IO 事件处理 ====================
+      // SocketIO SLAM事件处理
+      // SLAM状态更新
+      socket.on("slam_status", function (data) {
+        updateSLAMStatus(data);
+      });
+
+      socket.on("slam_progress", function (data) {
+        updateSlamProgress(data);
+      });
+
+      socket.on("slam_event", function (data) {
+        handleSLAMEvent(data);
+      });
+      function updateSLAMStatus(data) {
+        slamMappingActive = data.mapping_active;
+        const statusElement = document.getElementById("slam-status");
+        const startBtn = document.getElementById("btn-start-slam");
+        const stopBtn = document.getElementById("btn-stop-slam");
+
+        if (slamMappingActive) {
+          statusElement.textContent = "建图中";
+          statusElement.style.color = "#27ae60";
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+
+          // 开始计时
+          mappingStartTime = Date.now();
+          startMappingTimer();
+
+          logSafetyEvent("normal", "[SLAM] 开始实时建图");
+        } else {
+          statusElement.textContent = "未启动";
+          statusElement.style.color = "#e74c3c";
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+
+          // 停止计时
+          stopMappingTimer();
+
+          logSafetyEvent("normal", "[SLAM] 停止建图");
+        }
+      }
+
+      function handleSLAMEvent(data) {
+        switch (data.type) {
+          case "map_saved":
+            logSafetyEvent("normal", `[SLAM] ${data.message}`);
+            showNotification("地图保存成功", "success");
+            break;
+          case "map_reset":
+            logSafetyEvent("warning", `[SLAM] ${data.message}`);
+            showNotification("地图已重置", "warning");
+            break;
+        }
+      }
+
+      function startMappingTimer() {
+        if (mappingTimer) {
+          clearInterval(mappingTimer);
+        }
+
+        mappingTimer = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - mappingStartTime) / 1000);
+          const minutes = Math.floor(elapsed / 60);
+          const seconds = elapsed % 60;
+          document.getElementById("mapping-time").textContent = `${minutes
+            .toString()
+            .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+        }, 1000);
+      }
+      function updateSlamProgress(data) {
+        if (data.explored_percentage !== undefined) {
+          document.getElementById("explored-area").textContent =
+            data.explored_percentage.toFixed(1) + "%";
+        }
+      }
+
+      function stopMappingTimer() {
+        if (mappingTimer) {
+          clearInterval(mappingTimer);
+          mappingTimer = null;
+        }
+      }
+
+      // SLAM控制函数
+      function startSLAMMapping() {
+        socket.emit("start_slam_mapping", {}, function (response) {
+          showNotification(
+            response.message,
+            response.status === "success" ? "success" : "error"
+          );
+        });
+      }
+
+      function stopSLAMMapping() {
+        socket.emit("stop_slam_mapping", {}, function (response) {
+          showNotification(
+            response.message,
+            response.status === "success" ? "success" : "error"
+          );
+        });
+      }
+
+      function saveMap() {
+        const filename = prompt(
+          "请输入地图文件名:",
+          `map_${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}`
+        );
+        if (filename) {
+          socket.emit(
+            "save_slam_map",
+            { filename: filename },
+            function (response) {
+              showNotification(
+                response.message,
+                response.status === "success" ? "success" : "error"
+              );
+            }
+          );
+        }
+      }
+
+      function resetMap() {
+        if (confirm("确定要重置地图吗？这将清除所有建图数据。")) {
+          socket.emit("reset_map");
+        }
+      }
+
+      // 地图数据统计更新
+      function updateMapStats(mapData) {
+        if (!mapData || !mapData.data) return;
+
+        const data = mapData.data;
+        let freeCount = 0;
+        let occupiedCount = 0;
+        let unknownCount = 0;
+
+        for (let value of data) {
+          if (value === 0) freeCount++;
+          else if (value === 100) occupiedCount++;
+          else if (value === -1) unknownCount++;
+        }
+
+        const total = data.length;
+        const exploredArea = (
+          ((freeCount + occupiedCount) / total) *
+          100
+        ).toFixed(1);
+
+        document.getElementById("explored-area").textContent =
+          exploredArea + "%";
+        document.getElementById("obstacle-count").textContent = occupiedCount;
+
+        // 更新地图尺寸显示
+        if (mapData.metadata) {
+          document.getElementById(
+            "map-size"
+          ).textContent = `${mapData.metadata.width} x ${mapData.metadata.height}`;
+        }
+      }
+
+      // 在收到地图数据时更新统计信息
+      socket.on("map_data", function (data) {
+        updateMapStats(data);
+      });
+      // 连接状态处理
+      socket.on("connect", () => {
+        updateConnectionStatus(
+          "系统已连接 - 延迟: 18ms - 系统状态: 正常运行",
+          true
+        );
+        logSafetyEvent("normal", "[系统] 已连接到ROS 2服务器");
+      });
+
+      socket.on("disconnect", () => {
+        updateConnectionStatus("系统连接断开 - 请检查网络连接", false);
+        logSafetyEvent("danger", "[系统] 与ROS 2服务器断开连接");
+      });
+
+      // 安全状态更新
+      socket.on("safety_status", (data) => {
+        safetyData = data;
+        updateSafetyDisplay(data);
+      });
+
+      // 安全事件处理
+      socket.on("safety_event", (data) => {
+        handleSafetyEvent(data);
+      });
+
+      // 实时速度更新
+      socket.on("velocity_data", (data) => {
+        document.getElementById("current-speed").textContent = Math.abs(
+          data.linear_x
+        ).toFixed(2);
+      });
+
+      // IMU数据更新
+      socket.on("imu_data", (data) => {
+        document.getElementById("roll-value").textContent =
+          ((data.orientation.x * 180) / Math.PI).toFixed(1) + "°";
+        document.getElementById("pitch-value").textContent =
+          ((data.orientation.y * 180) / Math.PI).toFixed(1) + "°";
+        document.getElementById("yaw-value").textContent =
+          ((data.orientation.z * 180) / Math.PI).toFixed(1) + "°";
+      });
+
+      // 电池数据更新
+      socket.on("battery_data", (data) => {
+        const percentage = Math.round(data.percentage * 100);
+        document.getElementById("battery-fill").style.width = percentage + "%";
+        document
+          .getElementById("battery-fill")
+          .querySelector(".battery-percentage").textContent = percentage + "%";
+        document.getElementById("battery-voltage").textContent =
+          data.voltage.toFixed(1) + "V";
+
+        let statusText = "未知";
+        if (data.status === 1) statusText = "充电中";
+        else if (data.status === 2) statusText = "放电中";
+        else if (data.status === 3) statusText = "已充满";
+        document.getElementById("battery-status").textContent = statusText;
+      });
+
+      // 性能监控数据
+      socket.on("performance_metrics", (data) => {
+        document.getElementById("network-latency").textContent =
+          (data.network_latency * 1000).toFixed(1) + " ms";
+        document.getElementById("adaptive-control").textContent =
+          data.adaptive_control_active ? "激活" : "未激活";
+        document.getElementById("adaptive-control").style.color =
+          data.adaptive_control_active ? "#27ae60" : "#7f8c8d";
+        document.getElementById("test-scenario").textContent =
+          data.network_test_scenario;
+
+        // 更新轨迹记录状态
+        if (data.trajectory_recording !== isRecordingTrajectory) {
+          isRecordingTrajectory = data.trajectory_recording;
+          updateRecordStatus();
+        }
+      });
+
+      // 轨迹点数据
+      socket.on("trajectory_point", (data) => {
+        trajectoryPoints.push(data);
+        document.getElementById("trajectory-points").textContent =
+          trajectoryPoints.length;
+      });
+
+      // 控制事件
+      socket.on("control_event", (data) => {
+        switch (data.type) {
+          case "trajectory_record":
+            logSafetyEvent(
+              data.activated ? "warning" : "normal",
+              `[轨迹记录] ${data.message}`
+            );
+            break;
+          case "network_test":
+            logSafetyEvent("normal", `[网络测试] ${data.message}`);
+            break;
+        }
+      });
+
+      // 命令响应
+      socket.on("command_response", (data) => {
+        // 可以在这里显示命令响应消息
+        console.log("命令响应:", data);
+      });
+
+      // 地图数据
+      socket.on("map_data", (data) => {
+        console.log("📨 Socket收到地图数据！", data);
+        console.log(
+          "数据尺寸:",
+          data.metadata.width,
+          "x",
+          data.metadata.height
+        );
+
+        if (mapSystem) {
+          console.log("🔄 设置地图数据到mapSystem...");
+          mapSystem.state.mapData = data;
+          mapSystem.updateMapParameters(data.metadata);
+          mapSystem.centerMap();
+          mapSystem.render();
+          console.log("✅ 地图数据设置完成，mapData:", mapSystem.state.mapData);
+        } else {
+          console.log("❌ mapSystem未初始化，无法设置数据");
+        }
+      });
+
+      // 导航点数据
+      socket.on("waypoints_data", (data) => {
+        if (mapSystem) {
+          mapSystem.waypoints = data;
+          mapSystem.render();
+          mapSystem.updateWaypointList();
+        }
+      });
+      // 坐标转换结果处理
+      socket.on("waypoint_added_with_coords", (data) => {
+        console.log("✅ 导航点添加成功:", data);
+
+        if (mapSystem) {
+          // 在后端已经添加了导航点，这里只需要更新显示
+          mapSystem.waypoints.push(data.waypoint);
+          mapSystem.render();
+          mapSystem.updateWaypointList();
+        }
+      });
+
+      // 坐标转换测试结果
+      socket.on("coordinate_test_result", (data) => {
+        console.log("🧪 坐标转换测试:", data);
+      });
+
+      // 坐标转换结果
+      socket.on("coordinate_conversion_result", (data) => {
+        console.log("🔄 坐标转换:", data);
+      });
+      // ==================== 核心功能函数 ====================
+
+      function updateConnectionStatus(message, connected) {
+        document.getElementById("connection-text").textContent = message;
+        const dot = document.getElementById("status-dot");
+        if (connected) {
+          dot.style.background = "#00c853";
+          dot.style.boxShadow = "0 0 10px #00c853";
+        } else {
+          dot.style.background = "#ff4444";
+          dot.style.boxShadow = "0 0 10px #ff4444";
+        }
+      }
+
+      function updateSafetyDisplay(data) {
+        // 更新安全状态
+        const safetyLevels = ["正常", "警告", "危险", "紧急"];
+        const safetyLevelElement = document.getElementById("safety-level");
+        const safetyLevelItem = document.getElementById("safety-level-item");
+
+        safetyLevelElement.textContent = safetyLevels[data.safety_level];
+        safetyLevelItem.className =
+          "safety-status-item safety-level-" +
+          ["normal", "warning", "danger", "emergency"][data.safety_level];
+
+        // 更新障碍物距离
+        document.getElementById("obstacle-distance").textContent =
+          data.obstacle_distance.toFixed(2) + " m";
+
+        // 更新紧急停止按钮状态
+        updateEmergencyButton(data.emergency_stop);
+      }
+
+      function handleSafetyEvent(data) {
+        switch (data.type) {
+          case "emergency_stop":
+            logSafetyEvent(
+              data.activated ? "emergency" : "normal",
+              `[紧急停止] ${data.message}`
+            );
+            break;
+          case "speed_level_change":
+            logSafetyEvent("normal", `[速度控制] ${data.message}`);
+            break;
+          case "system_reset":
+            logSafetyEvent("normal", `[系统] ${data.message}`);
+            break;
+          default:
+            logSafetyEvent("normal", `[事件] ${data.message}`);
+        }
+      }
+
+      function logSafetyEvent(level, message) {
+        const logElement = document.getElementById("safety-logs");
+        const timestamp = new Date().toLocaleTimeString();
+
+        const logEntry = document.createElement("div");
+        logEntry.innerHTML = `[${timestamp}] ${message}`;
+        logEntry.className = `log-${level}`;
+
+        logElement.prepend(logEntry);
+
+        // 最多保留20条日志
+        if (logElement.children.length > 20) {
+          logElement.removeChild(logElement.lastChild);
+        }
+      }
+
+      // ==================== 控制功能 ====================
+
+      function sendControlCommand(linear_x, angular_z) {
+        socket.emit("control_command", {
+          linear_x: linear_x,
+          angular_z: angular_z,
+        });
+      }
+
+      function toggleEmergencyStop() {
+        emergencyActive = !emergencyActive;
+        socket.emit("emergency_stop", { activate: emergencyActive });
+      }
+
+      function updateEmergencyButton(isActive) {
+        emergencyActive = isActive;
+        const btn = document.getElementById("emergency-stop-btn");
+        const toggleBtn = document.getElementById("toggle-emergency-btn");
+
+        if (isActive) {
+          btn.innerHTML = "🚨<br>急停激活";
+          btn.classList.add("active");
+          toggleBtn.innerHTML = "🔄 解除急停";
+          toggleBtn.style.background = "#27ae60";
+        } else {
+          btn.innerHTML = "🛑<br>急停";
+          btn.classList.remove("active");
+          toggleBtn.innerHTML = "🔄 激活急停";
+          toggleBtn.style.background = "#e74c3c";
+        }
+      }
+
+      function resetSafetySystem() {
+        socket.emit("reset_safety_system");
+        logSafetyEvent("normal", "[系统] 安全系统重置请求已发送");
+      }
+
+      // ==================== 速度控制功能 ====================
+
+      const speedSlider = document.getElementById("speed-mode-slider");
+
+      speedSlider.addEventListener("input", updateSpeedLevel);
+
+      function updateSpeedLevel() {
+        const value = parseInt(speedSlider.value);
+        let selectedLevel;
+
+        if (value < 35) {
+          selectedLevel = 1; // 精密模式
+        } else if (value < 65) {
+          selectedLevel = 2; // 标准模式
+        } else {
+          selectedLevel = 3; // 高速模式
+        }
+
+        if (currentSpeedLevel !== selectedLevel) {
+          currentSpeedLevel = selectedLevel;
+          const levelConfig = speedLevels[selectedLevel];
+
+          // 更新界面显示
+          document.getElementById("speed-mode-label").textContent =
+            levelConfig.label;
+          document.getElementById("speed-mode-label").style.color =
+            levelConfig.color;
+          document.getElementById("max-speed-value").textContent =
+            levelConfig.maxSpeed.toFixed(1);
+
+          // 发送到后端
+          socket.emit("set_speed_level", { level: selectedLevel });
+        }
+      }
+
+      // ==================== 轨迹记录功能 ====================
+
+      function startTrajectoryRecord() {
+        socket.emit("start_trajectory_record");
+        isRecordingTrajectory = true;
+        updateRecordStatus();
+      }
+
+      function stopTrajectoryRecord() {
+        socket.emit("stop_trajectory_record");
+        isRecordingTrajectory = false;
+        updateRecordStatus();
+      }
+
+      function updateRecordStatus() {
+        const statusElement = document.getElementById("record-status");
+        const startBtn = document.getElementById("btn-start-record");
+        const stopBtn = document.getElementById("btn-stop-record");
+
+        if (isRecordingTrajectory) {
+          statusElement.textContent = "记录中...";
+          statusElement.style.color = "#e74c3c";
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+        } else {
+          statusElement.textContent = "未记录";
+          statusElement.style.color = "#7f8c8d";
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+        }
+      }
+
+      // ==================== 网络测试功能 ====================
+
+      function applyNetworkTest() {
+        const scenario = document.getElementById("network-test-select").value;
+        socket.emit("set_network_test", { scenario: scenario });
+      }
+
+      function resetAdaptiveController() {
+        socket.emit("reset_adaptive_controller");
+      }
+
+      // ==================== 运动控制事件 ====================
+
+      const btnForward = document.getElementById("btn-forward");
+      const btnBack = document.getElementById("btn-back");
+      const btnLeft = document.getElementById("btn-left");
+      const btnRight = document.getElementById("btn-right");
+      const btnRotateLeft = document.getElementById("btn-rotate-left");
+      const btnRotateRight = document.getElementById("btn-rotate-right");
+      const btnStop = document.getElementById("btn-stop");
+
+      // 按钮按下事件
+      btnForward.addEventListener("mousedown", () =>
+        sendControlCommand(0.5, 0)
+      );
+      btnBack.addEventListener("mousedown", () => sendControlCommand(-0.5, 0));
+      btnLeft.addEventListener("mousedown", () => sendControlCommand(0, 0.5));
+      btnRight.addEventListener("mousedown", () => sendControlCommand(0, -0.5));
+      btnRotateLeft.addEventListener("mousedown", () =>
+        sendControlCommand(0, 1.0)
+      );
+      btnRotateRight.addEventListener("mousedown", () =>
+        sendControlCommand(0, -1.0)
+      );
+      btnStop.addEventListener("click", () => sendControlCommand(0, 0));
+
+      // 按钮释放事件
+      document.querySelectorAll(".control-btn").forEach((btn) => {
+        btn.addEventListener("mouseup", () => sendControlCommand(0, 0));
+        btn.addEventListener("mouseleave", () => sendControlCommand(0, 0));
+      });
+
+      // ==================== 地图交互系统 ====================
+      class MapInteraction {
+        constructor(canvasId) {
+          this.canvas = document.getElementById(canvasId);
+          this.ctx = this.canvas.getContext("2d");
+
+          // 初始状态
+          this.state = {
+            mapData: null,
+            scale: 1.0,
+            offset: { x: 0, y: 0 }, // 修复：从0开始
+            mapOrigin: { x: -10, y: -10 }, // 根据你的地图设置
+            resolution: 0.05,
+            width: 384,
+            height: 384,
+            isDragging: false,
+            startDragPos: { x: 0, y: 0 },
+            startDragOffset: { x: 0, y: 0 },
+          };
+
+          this.waypoints = [];
+
+          // 🎯 关键修复：使用箭头函数绑定所有方法
+          this.handleZoom = (e) => {
+            e.preventDefault();
+
+            const rect = this.canvas.getBoundingClientRect();
+            const screenX = e.clientX - rect.left;
+            const screenY = e.clientY - rect.top;
+
+            const mouseWorldPos = this.screenToWorld(screenX, screenY);
+
+            const scaleFactor = 0.1;
+            const oldScale = this.state.scale;
+            const newScale = Math.max(
+              0.1,
+              Math.min(
+                10.0,
+                oldScale * (1 + (e.deltaY > 0 ? -scaleFactor : scaleFactor))
+              )
+            );
+
+            const newScreenX =
+              ((mouseWorldPos.x - this.state.mapOrigin.x) /
+                this.state.resolution) *
+                newScale +
+              this.state.offset.x;
+            const newScreenY =
+              this.state.height -
+              ((mouseWorldPos.y - this.state.mapOrigin.y) /
+                this.state.resolution) *
+                newScale +
+              this.state.offset.y;
+
+            this.state.offset.x -= screenX - newScreenX;
+            this.state.offset.y -= screenY - newScreenY;
+
+            this.state.scale = newScale;
+            document.getElementById("scale-display").textContent =
+              newScale.toFixed(2);
+            this.render();
+          };
+
+          this.startDrag = (e) => {
+            if (e.button === 0) {
+              this.state.isDragging = true;
+              this.state.startDragPos = { x: e.clientX, y: e.clientY };
+              this.state.startDragOffset = { ...this.state.offset };
+              this.canvas.style.cursor = "grabbing";
+            }
+          };
+
+          this.handleDrag = (e) => {
+            if (!this.state.isDragging) return;
+
+            const deltaX = e.clientX - this.state.startDragPos.x;
+            const deltaY = e.clientY - this.state.startDragPos.y;
+
+            this.state.offset.x = this.state.startDragOffset.x + deltaX;
+            this.state.offset.y = this.state.startDragOffset.y + deltaY;
+
+            this.render();
+          };
+
+          this.endDrag = () => {
+            this.state.isDragging = false;
+            this.canvas.style.cursor = "crosshair";
+          };
+
+          this.handleWaypointPlacement = (e) => {
+            e.preventDefault();
+
+            const rect = this.canvas.getBoundingClientRect();
+            const screenX = e.clientX - rect.left;
+            const screenY = e.clientY - rect.top;
+
+            console.log("🖱️ 鼠标点击位置:", { screenX, screenY });
+
+            // 🎯 关键修改：使用新的带坐标转换的事件
+            socket.emit("add_waypoint_with_conversion", {
+              x: screenX,
+              y: screenY,
+              label: `点${this.waypoints.length + 1}`,
+              color: this.getRandomColor(),
+            });
+
+            console.log("📍 发送坐标转换请求到后端");
+          };
+
+          this.updateCoordinateDisplay = (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const screenX = e.clientX - rect.left;
+            const screenY = e.clientY - rect.top;
+
+            const worldPos = this.screenToWorld(screenX, screenY);
+
+            const display = document.getElementById("coordinates-display");
+            if (display) {
+              display.style.display = "block";
+              display.style.left = e.clientX + 10 + "px";
+              display.style.top = e.clientY + 10 + "px";
+              display.textContent = `世界坐标: (${worldPos.x.toFixed(
+                2
+              )}, ${worldPos.y.toFixed(2)})`;
+            }
+          };
+
+          this.hideCoordinateDisplay = () => {
+            const display = document.getElementById("coordinates-display");
+            if (display) {
+              display.style.display = "none";
+            }
+          };
+
+          this.updateWaypointList = () => {
+            const listElement = document.getElementById("nav-points-list");
+            if (!listElement) {
+              console.log("❌ 找不到导航点列表元素");
+              return;
+            }
+
+            if (this.waypoints.length === 0) {
+              listElement.innerHTML =
+                '<div style="text-align: center; color: #7f8c8d; padding: 20px;">暂无导航点，右键点击地图添加</div>';
+              return;
+            }
+
+            listElement.innerHTML = this.waypoints
+              .map(
+                (wp) => `
+                        <li>
+                            <div class="point-info">
+                                <div><strong>${wp.label}</strong></div>
+                                <div>(${wp.x.toFixed(2)}, ${wp.y.toFixed(
+                  2
+                )})</div>
+                            </div>
+                            <div class="point-actions">
+                                <button onclick="mapSystem.deleteWaypoint(${
+                                  wp.id
+                                })"><i class="fas fa-trash-alt"></i></button>
+                            </div>
+                        </li>
+                    `
+              )
+              .join("");
+          };
+
+          // 设置监听器
+          this.setupListeners();
+
+          // 初始居中
+          this.centerMap();
+          this.render();
+        }
+
+        setupListeners() {
+          // 使用已经绑定的方法
+          this.canvas.addEventListener("wheel", this.handleZoom);
+          this.canvas.addEventListener("mousedown", this.startDrag);
+          this.canvas.addEventListener("mousemove", this.handleDrag);
+          this.canvas.addEventListener("mouseup", this.endDrag);
+          this.canvas.addEventListener("mouseleave", this.endDrag);
+          this.canvas.addEventListener(
+            "contextmenu",
+            this.handleWaypointPlacement
+          );
+          this.canvas.addEventListener(
+            "mousemove",
+            this.updateCoordinateDisplay
+          );
+          this.canvas.addEventListener(
+            "mouseleave",
+            this.hideCoordinateDisplay
+          );
+        }
+
+        // 其他方法...
+        updateMapParameters(metadata) {
+          this.state.width = metadata.width;
+          this.state.height = metadata.height;
+          this.state.resolution = metadata.resolution;
+          this.state.mapOrigin.x = metadata.origin.x;
+          this.state.mapOrigin.y = metadata.origin.y;
+
+          console.log("📐 地图参数已更新:", {
+            width: this.state.width,
+            height: this.state.height,
+            resolution: this.state.resolution,
+            origin: this.state.mapOrigin,
+          });
+
+          // 重新居中
+          this.centerMap();
+        }
+
+        centerMap() {
+          if (!this.state.mapData) {
+            // 如果没有地图数据，使用默认参数居中
+            const mapWidthPixels =
+              this.state.width * this.state.resolution * this.state.scale;
+            const mapHeightPixels =
+              this.state.height * this.state.resolution * this.state.scale;
+            this.state.offset.x = (this.canvas.width - mapWidthPixels) / 2;
+            this.state.offset.y = (this.canvas.height - mapHeightPixels) / 2;
+          } else {
+            // 有地图数据时使用实际参数
+            const metadata = this.state.mapData.metadata;
+            const mapWidthPixels =
+              metadata.width * metadata.resolution * this.state.scale;
+            const mapHeightPixels =
+              metadata.height * metadata.resolution * this.state.scale;
+            this.state.offset.x = (this.canvas.width - mapWidthPixels) / 2;
+            this.state.offset.y = (this.canvas.height - mapHeightPixels) / 2;
+          }
+          console.log("🎯 地图已居中，偏移量:", this.state.offset);
+        }
+
+        screenToWorld(screenX, screenY) {
+          if (!this.state.mapData) {
+            console.log("⚠️ 无地图数据，使用简化转换");
+            return { x: screenX, y: screenY };
+          }
+
+          const metadata = this.state.mapData.metadata;
+
+          // 转换为地图像素坐标
+          const pixelX = (screenX - this.state.offset.x) / this.state.scale;
+          const pixelY = (screenY - this.state.offset.y) / this.state.scale;
+
+          // 转换为世界坐标（Y轴翻转）
+          const worldX = metadata.origin.x + pixelX * metadata.resolution;
+          const worldY =
+            metadata.origin.y +
+            (metadata.height - pixelY) * metadata.resolution;
+
+          console.log(
+            `🔄 坐标转换: 屏幕(${screenX}, ${screenY}) → 世界(${worldX.toFixed(
+              3
+            )}, ${worldY.toFixed(3)})`
+          );
+
+          return { x: worldX, y: worldY };
+        }
+
+        worldToScreen(worldX, worldY) {
+          if (!this.state.mapData) {
+            return { x: worldX, y: worldY };
+          }
+
+          const metadata = this.state.mapData.metadata;
+
+          // 转换为地图像素坐标
+          const pixelX = (worldX - metadata.origin.x) / metadata.resolution;
+          const pixelY =
+            metadata.height -
+            (worldY - metadata.origin.y) / metadata.resolution;
+
+          // 转换为屏幕坐标
+          const screenX = pixelX * this.state.scale + this.state.offset.x;
+          const screenY = pixelY * this.state.scale + this.state.offset.y;
+
+          return { x: screenX, y: screenY };
+        }
+
+        addWaypoint(x, y, label = "") {
+          const waypoint = {
+            id: Date.now(),
+            x: x,
+            y: y,
+            label: label,
+            color: this.getRandomColor(),
+            timestamp: Date.now(),
+          };
+
+          this.waypoints.push(waypoint);
+          this.updateWaypointList(); // 现在这个方法已经正确绑定了
+
+          console.log("📍 添加导航点:", waypoint);
+
+          return waypoint;
+        }
+
+        deleteWaypoint(id) {
+          this.waypoints = this.waypoints.filter((wp) => wp.id !== id);
+          this.render();
+          this.updateWaypointList();
+          console.log("🗑️ 删除导航点:", id);
+        }
+
+        getRandomColor() {
+          const colors = [
+            "#e74c3c",
+            "#3498db",
+            "#2ecc71",
+            "#9b59b6",
+            "#f39c12",
+          ];
+          return colors[this.waypoints.length % colors.length];
+        }
+        drawMapBoundaries() {
+          if (!this.state.mapData) return;
+
+          const metadata = this.state.mapData.metadata;
+
+          // 计算地图边界的世界坐标
+          const left = metadata.origin.x;
+          const bottom = metadata.origin.y;
+          const right = left + metadata.width * metadata.resolution;
+          const top = bottom + metadata.height * metadata.resolution;
+
+          // 转换为屏幕坐标
+          const corners = [
+            this.worldToScreen(left, bottom), // 左下
+            this.worldToScreen(right, bottom), // 右下
+            this.worldToScreen(right, top), // 右上
+            this.worldToScreen(left, top), // 左上
+          ];
+
+          // 绘制边界框
+          this.ctx.strokeStyle = "#00ff00";
+          this.ctx.lineWidth = 2;
+          this.ctx.beginPath();
+          this.ctx.moveTo(corners[0].x, corners[0].y);
+          this.ctx.lineTo(corners[1].x, corners[1].y);
+          this.ctx.lineTo(corners[2].x, corners[2].y);
+          this.ctx.lineTo(corners[3].x, corners[3].y);
+          this.ctx.closePath();
+          this.ctx.stroke();
+
+          console.log(
+            `📏 地图边界: 世界[(${left},${bottom}) to (${right},${top})]`
+          );
+        }
+        render() {
+          console.log("🎨 开始渲染地图...");
+          this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+          if (this.state.mapData) {
+            console.log("📊 渲染真实地图数据");
+            this.drawMap();
+          } else {
+            console.log("⏳ 渲染占位符");
+            this.drawPlaceholder();
+          }
+
+          this.drawCoordinateSystem();
+          this.drawWaypoints();
+          this.drawDebugInfo();
+          this.drawMapBoundaries();
+          console.log("✅ 渲染完成");
+        }
+
+        drawMap() {
+          console.log("🖼️ 绘制地图数据...");
+
+          // 清空画布
+          this.ctx.fillStyle = "#0f1f38";
+          this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+          if (!this.state.mapData || !this.state.mapData.data) {
+            console.log("❌ 没有地图数据");
+            return;
+          }
+
+          const data = this.state.mapData.data;
+          const width = this.state.mapData.metadata.width;
+          const height = this.state.mapData.metadata.height;
+
+          console.log(
+            `🗺️ 地图数据: ${width}x${height}, 数据长度: ${data.length}`
+          );
+
+          // 绘制每个网格
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const value = data[y * width + x];
+
+              // 设置颜色
+              if (value === 100) {
+                this.ctx.fillStyle = "#000000"; // 障碍物 - 黑色
+              } else if (value === 0) {
+                this.ctx.fillStyle = "#ffffff"; // 自由空间 - 白色
+              } else if (value === -1) {
+                this.ctx.fillStyle = "#888888"; // 未知区域 - 灰色
+              } else {
+                this.ctx.fillStyle = "#444444"; // 其他 - 深灰
+              }
+
+              // 计算屏幕位置
+              const worldX = this.state.mapOrigin.x + x * this.state.resolution;
+              const worldY = this.state.mapOrigin.y + y * this.state.resolution;
+              const screenPos = this.worldToScreen(worldX, worldY);
+
+              // 绘制网格（考虑缩放）
+              const cellSize = this.state.resolution * this.state.scale;
+              if (cellSize > 1) {
+                // 只在足够大时绘制
+                this.ctx.fillRect(screenPos.x, screenPos.y, cellSize, cellSize);
+              }
+            }
+          }
+
+          console.log("✅ 地图绘制完成");
+        }
+
+        drawGrid() {
+          this.ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+          this.ctx.lineWidth = 1;
+
+          for (
+            let x = Math.floor(this.state.mapOrigin.x);
+            x <=
+            this.state.mapOrigin.x + this.state.width * this.state.resolution;
+            x += 1.0
+          ) {
+            for (
+              let y = Math.floor(this.state.mapOrigin.y);
+              y <=
+              this.state.mapOrigin.y +
+                this.state.height * this.state.resolution;
+              y += 1.0
+            ) {
+              const screenPos = this.worldToScreen(x, y);
+
+              this.ctx.beginPath();
+              this.ctx.arc(screenPos.x, screenPos.y, 2, 0, Math.PI * 2);
+              this.ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+              this.ctx.fill();
+
+              if (x % 2 === 0 && y % 2 === 0) {
+                this.ctx.fillStyle = "white";
+                this.ctx.font = "10px Arial";
+                this.ctx.fillText(
+                  `(${x},${y})`,
+                  screenPos.x + 5,
+                  screenPos.y - 5
+                );
+              }
+            }
+          }
+        }
+
+        drawWaypoints() {
+          this.waypoints.forEach((wp) => {
+            const screenPos = this.worldToScreen(wp.x, wp.y);
+
+            this.ctx.fillStyle = wp.color;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, 8, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            this.ctx.strokeStyle = "#ffffff";
+            this.ctx.lineWidth = 2;
+            this.ctx.stroke();
+
+            this.ctx.fillStyle = "#ffffff";
+            this.ctx.font = "12px Arial";
+            this.ctx.fillText(wp.label, screenPos.x + 12, screenPos.y - 8);
+          });
+        }
+
+        drawCoordinateSystem() {
+          // 绘制坐标轴
+          this.ctx.strokeStyle = "#4299e1";
+          this.ctx.lineWidth = 2;
+
+          // X轴
+          const originScreen = this.worldToScreen(0, 0);
+          this.ctx.beginPath();
+          this.ctx.moveTo(originScreen.x, originScreen.y);
+          this.ctx.lineTo(originScreen.x + 100, originScreen.y);
+          this.ctx.stroke();
+
+          // Y轴
+          this.ctx.beginPath();
+          this.ctx.moveTo(originScreen.x, originScreen.y);
+          this.ctx.lineTo(originScreen.x, originScreen.y - 100);
+          this.ctx.stroke();
+        }
+
+        drawDebugInfo() {
+          this.ctx.fillStyle = "white";
+          this.ctx.font = "12px Arial";
+          this.ctx.fillText(
+            `地图原点: (${this.state.mapOrigin.x.toFixed(
+              2
+            )}, ${this.state.mapOrigin.y.toFixed(2)})`,
+            10,
+            20
+          );
+          this.ctx.fillText(`分辨率: ${this.state.resolution}`, 10, 35);
+          this.ctx.fillText(
+            `尺寸: ${this.state.width} x ${this.state.height}`,
+            10,
+            50
+          );
+          this.ctx.fillText(`导航点数量: ${this.waypoints.length}`, 10, 65);
+          this.ctx.fillText(
+            `坐标转换: ${this.state.mapData ? "已加载" : "等待数据"}`,
+            10,
+            80
+          );
+        }
+
+        drawPlaceholder() {
+          this.ctx.fillStyle = "#0f1f38";
+          this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+          this.ctx.fillStyle = "#4a5568";
+          this.ctx.font = "20px Arial";
+          this.ctx.textAlign = "center";
+          this.ctx.fillText(
+            "等待地图数据...",
+            this.canvas.width / 2,
+            this.canvas.height / 2
+          );
+        }
+
+        zoomIn() {
+          this.state.scale = Math.min(10.0, this.state.scale * 1.2);
+          document.getElementById("scale-display").textContent =
+            this.state.scale.toFixed(2);
+          this.render();
+        }
+
+        zoomOut() {
+          this.state.scale = Math.max(0.1, this.state.scale / 1.2);
+          document.getElementById("scale-display").textContent =
+            this.state.scale.toFixed(2);
+          this.render();
+        }
+
+        resetView() {
+          this.state.scale = 1.0;
+          this.centerMap();
+          document.getElementById("scale-display").textContent = "1.00";
+          this.render();
+        }
+
+        toggleGrid() {
+          this.render();
+        }
+      }
+
+      // ==================== 全局变量和初始化 ====================
+
+      let mapSystem;
+
+      // 标签页切换功能
+      const tabBtns = document.querySelectorAll(".tab-btn");
+      const tabContents = document.querySelectorAll(".tab-content");
+
+      tabBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          // 移除所有活动标签
+          tabBtns.forEach((b) => b.classList.remove("active"));
+          tabContents.forEach((c) => c.classList.remove("active"));
+
+          // 添加当前活动标签
+          btn.classList.add("active");
+          const tabId = btn.getAttribute("data-tab");
+          document.getElementById(tabId).classList.add("active");
+        });
+      });
+
+      // SLAM控制
+      document
+        .getElementById("btn-start-slam")
+        .addEventListener("click", () => {
+          alert("SLAM建图已启动！开始构建环境地图");
+        });
+
+      document.getElementById("btn-start-nav").addEventListener("click", () => {
+        alert("开始导航！机器人将按计划路线移动");
+      });
+
+      document.getElementById("btn-save-map").addEventListener("click", () => {
+        alert("地图数据已成功保存！");
+      });
+
+      // 清除所有导航点
+      document
+        .getElementById("btn-rm-points")
+        .addEventListener("click", function () {
+          if (mapSystem) {
+            mapSystem.clearWaypoints();
+          }
+        });
+
+      // 添加任务功能
+      document
+        .getElementById("btn-add-task")
+        .addEventListener("click", function () {
+          const taskType = document.getElementById("task-type").value;
+          const taskCoord = document.getElementById("task-coord").value;
+          const taskPriority = document.getElementById("task-priority").value;
+
+          if (!taskType) {
+            alert("请选择任务类型");
+            return;
+          }
+
+          if (!taskCoord) {
+            alert("请输入目标坐标");
+            return;
+          }
+
+          const taskTypes = {
+            charge: "充电",
+            inspection: "巡检",
+            transport: "运输",
+            monitoring: "监测",
+          };
+
+          const taskNames = {
+            charge: "前往充电站",
+            inspection: "巡检区域A",
+            transport: "运送物品到B",
+            monitoring: "环境监测",
+          };
+
+          const priorityClasses = {
+            high: "priority-high",
+            medium: "priority-medium",
+            low: "priority-low",
+          };
+
+          // 创建新任务项
+          const taskList = document.querySelector(".task-list");
+          const taskItem = document.createElement("div");
+          taskItem.className = "task-item";
+          taskItem.innerHTML = `
+                <div class="task-id">T-${
+                  1000 + (mapSystem ? mapSystem.waypoints.length : 0)
+                } | ${taskNames[taskType]}</div>
+                <div>${taskTypes[taskType]}</div>
+                <div>${taskCoord}</div>
+                <div class="${priorityClasses[taskPriority]}">${
+            taskPriority === "high"
+              ? "高"
+              : taskPriority === "medium"
+              ? "中"
+              : "低"
+          }</div>
+                <div class="status-pending">待执行</div>
+                <div>
+                    <button class="action-btn"><i class="fas fa-play"></i> 执行</button>
+                    <button class="action-btn"><i class="fas fa-trash"></i></button>
+                </div>
+            `;
+
+          taskList.appendChild(taskItem);
+
+          // 重置表单
+          document.getElementById("task-coord").value = "";
+          document.getElementById("task-priority").value = "low";
+
+          alert("任务添加成功！");
+        });
+
+      // 按键事件
+      document.addEventListener("keydown", (e) => {
+        switch (e.key) {
+          case "w":
+          case "ArrowUp":
+            btnForward.classList.add("active");
+            sendControlCommand(0.5, 0);
+            break;
+          case "s":
+          case "ArrowDown":
+            btnBack.classList.add("active");
+            sendControlCommand(-0.5, 0);
+            break;
+          case "a":
+          case "ArrowLeft":
+            btnLeft.classList.add("active");
+            sendControlCommand(0, 0.5);
+            break;
+          case "d":
+          case "ArrowRight":
+            btnRight.classList.add("active");
+            sendControlCommand(0, -0.5);
+            break;
+          case "q":
+            btnRotateLeft.classList.add("active");
+            sendControlCommand(0, 1.0);
+            break;
+          case "e":
+            btnRotateRight.classList.add("active");
+            sendControlCommand(0, -1.0);
+            break;
+          case " ":
+            btnStop.classList.add("active");
+            sendControlCommand(0, 0);
+            break;
+          case "E":
+          case "e":
+            if (e.ctrlKey) {
+              toggleEmergencyStop();
+            }
+            break;
+        }
+      });
+
+      document.addEventListener("keyup", (e) => {
+        btnForward.classList.remove("active");
+        btnBack.classList.remove("active");
+        btnLeft.classList.remove("active");
+        btnRight.classList.remove("active");
+        btnRotateLeft.classList.remove("active");
+        btnRotateRight.classList.remove("active");
+        btnStop.classList.remove("active");
+        sendControlCommand(0, 0);
+      });
+
+      // 初始化系统
+      window.addEventListener("load", () => {
+        mapSystem = new MapInteraction("slam-map-canvas");
+        updateRecordStatus();
+
+        // 添加几个示例导航点
+        if (mapSystem) {
+          mapSystem.addWaypoint(3.2, 2.5, "充电站");
+          mapSystem.addWaypoint(5.7, 4.1, "区域A");
+          mapSystem.addWaypoint(7.4, 1.9, "物品B");
+        }
+
+        logSafetyEvent("normal", "[系统] 机器人物联网云控系统已启动");
+        logSafetyEvent("normal", "[系统] 所有功能模块加载完成");
+      });
+      // 路径规划系统
+      class PathPlanningSystem {
+        constructor(canvasId) {
+          this.canvas = document.getElementById(canvasId);
+          this.ctx = this.canvas.getContext("2d");
+          this.state = {
+            scale: 1.0,
+            offset: { x: 0, y: 0 },
+            isDragging: false,
+            startDragPos: { x: 0, y: 0 },
+            startDragOffset: { x: 0, y: 0 },
+            addWaypointMode: false,
+          };
+
+          this.waypoints = [];
+          this.plannedPath = [];
+          this.setupListeners();
+          this.render();
+        }
+
+        setupListeners() {
+          // 缩放控制
+          this.canvas.addEventListener("wheel", (e) => this.handleZoom(e));
+
+          // 拖拽控制
+          this.canvas.addEventListener("mousedown", (e) => this.startDrag(e));
+          this.canvas.addEventListener("mousemove", (e) => this.handleDrag(e));
+          this.canvas.addEventListener("mouseup", (e) => this.endDrag());
+          this.canvas.addEventListener("mouseleave", (e) => this.endDrag());
+
+          // 路径点添加
+          this.canvas.addEventListener("click", (e) =>
+            this.handleCanvasClick(e)
+          );
+        }
+
+        handleCanvasClick(e) {
+          if (!this.state.addWaypointMode) return;
+
+          const rect = this.canvas.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+
+          // 转换为世界坐标（简化版本）
+          const worldX = (x - this.state.offset.x) / this.state.scale;
+          const worldY = (y - this.state.offset.y) / this.state.scale;
+
+          this.addWaypoint(worldX, worldY);
+        }
+
+        addWaypoint(x, y) {
+          const waypoint = {
+            id: `wp_${Date.now()}`,
+            x: x,
+            y: y,
+            label: `点${this.waypoints.length + 1}`,
+            timestamp: Date.now(),
+          };
+
+          this.waypoints.push(waypoint);
+
+          // 发送到后端
+          socket.emit("add_path_waypoint", {
+            x: x,
+            y: y,
+            label: waypoint.label,
+          });
+
+          this.render();
+          this.updateWaypointList();
+
+          return waypoint;
+        }
+
+        clearWaypoints() {
+          this.waypoints = [];
+          this.plannedPath = [];
+          socket.emit("clear_path_waypoints");
+          this.render();
+          this.updateWaypointList();
+        }
+
+        updateWaypointList() {
+          const listElement = document.getElementById("nav-points-list");
+          if (!listElement) return;
+
+          if (this.waypoints.length === 0) {
+            listElement.innerHTML =
+              '<div style="text-align: center; color: #7f8c8d; padding: 20px;">暂无导航点，右键点击地图添加</div>';
+            return;
+          }
+
+          listElement.innerHTML = this.waypoints
+            .map(
+              (wp) => `
+                    <li>
+                        <div class="point-info">
+                            <div><strong>${wp.label}</strong></div>
+                            <div>世界坐标: (${wp.x.toFixed(2)}, ${wp.y.toFixed(
+                2
+              )})</div>
+                            ${
+                              wp.pixel_x
+                                ? `<div style="font-size: 0.8em; color: #888;">像素坐标: (${wp.pixel_x}, ${wp.pixel_y})</div>`
+                                : ""
+                            }
+                        </div>
+                        <div class="point-actions">
+                            <button onclick="mapSystem.deleteWaypoint(${
+                              wp.id
+                            })"><i class="fas fa-trash-alt"></i></button>
+                        </div>
+                    </li>
+                `
+            )
+            .join("");
+        }
+
+        deleteWaypoint(id) {
+          this.waypoints = this.waypoints.filter((wp) => wp.id !== id);
+          this.render();
+          this.updateWaypointList();
+        }
+
+        planPath() {
+          if (this.waypoints.length < 2) {
+            alert("请至少添加2个路径点");
+            return;
+          }
+
+          const optimizationMethod = document.getElementById(
+            "optimization-method"
+          ).value;
+          const smoothingMethod =
+            document.getElementById("smoothing-method").value;
+
+          socket.emit("plan_path", {
+            optimization_method: optimizationMethod,
+            smoothing_method: smoothingMethod,
+          });
+        }
+
+        visualizePath(pathData) {
+          this.plannedPath = pathData.optimized_points || [];
+          this.render();
+        }
+
+        render() {
+          this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+          // 绘制网格
+          this.drawGrid();
+
+          // 绘制坐标轴
+          this.drawCoordinateSystem();
+
+          // 绘制路径点
+          this.drawWaypoints();
+
+          // 绘制规划路径
+          this.drawPlannedPath();
+        }
+
+        drawGrid() {
+          this.ctx.strokeStyle = "#2d3748";
+          this.ctx.lineWidth = 0.5;
+
+          const gridSize = 50;
+
+          for (let x = 0; x < this.canvas.width; x += gridSize) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(x, 0);
+            this.ctx.lineTo(x, this.canvas.height);
+            this.ctx.stroke();
+          }
+
+          for (let y = 0; y < this.canvas.height; y += gridSize) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, y);
+            this.ctx.lineTo(this.canvas.width, y);
+            this.ctx.stroke();
+          }
+        }
+
+        drawCoordinateSystem() {
+          this.ctx.strokeStyle = "#4299e1";
+          this.ctx.lineWidth = 2;
+
+          // 原点
+          const originX = -this.state.offset.x / this.state.scale;
+          const originY = -this.state.offset.y / this.state.scale;
+
+          // X轴
+          this.ctx.beginPath();
+          this.ctx.moveTo(0, originY);
+          this.ctx.lineTo(this.canvas.width, originY);
+          this.ctx.stroke();
+
+          // Y轴
+          this.ctx.beginPath();
+          this.ctx.moveTo(originX, 0);
+          this.ctx.lineTo(originX, this.canvas.height);
+          this.ctx.stroke();
+        }
+
+        drawWaypoints() {
+          this.waypoints.forEach((wp, index) => {
+            const screenPos = this.worldToScreen(wp.x, wp.y);
+
+            // 绘制点
+            this.ctx.fillStyle = "#e74c3c";
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, 8, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            // 绘制序号
+            this.ctx.fillStyle = "white";
+            this.ctx.font = "bold 14px Arial";
+            this.ctx.textAlign = "center";
+            this.ctx.textBaseline = "middle";
+            this.ctx.fillText((index + 1).toString(), screenPos.x, screenPos.y);
+
+            // 绘制标签
+            this.ctx.fillStyle = "#cbd5e0";
+            this.ctx.font = "12px Arial";
+            this.ctx.fillText(wp.label, screenPos.x, screenPos.y - 15);
+          });
+        }
+
+        drawPlannedPath() {
+          if (this.plannedPath.length < 2) return;
+
+          // 绘制平滑路径
+          this.ctx.strokeStyle = "#2ecc71";
+          this.ctx.lineWidth = 3;
+          this.ctx.setLineDash([]);
+
+          this.ctx.beginPath();
+
+          this.plannedPath.forEach((point, index) => {
+            const screenPos = this.worldToScreen(point[0], point[1]);
+
+            if (index === 0) {
+              this.ctx.moveTo(screenPos.x, screenPos.y);
+            } else {
+              this.ctx.lineTo(screenPos.x, screenPos.y);
+            }
+          });
+
+          this.ctx.stroke();
+
+          // 绘制路径点（小圆点）
+          this.plannedPath.forEach((point) => {
+            const screenPos = this.worldToScreen(point[0], point[1]);
+
+            this.ctx.fillStyle = "#27ae60";
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, 3, 0, Math.PI * 2);
+            this.ctx.fill();
+          });
+        }
+
+        worldToScreen(worldX, worldY) {
+          return {
+            x: worldX * this.state.scale + this.state.offset.x,
+            y: worldY * this.state.scale + this.state.offset.y,
+          };
+        }
+
+        handleZoom(e) {
+          e.preventDefault();
+
+          const mousePos = this.getMousePosition(e);
+          const scaleFactor = 0.1;
+          const oldScale = this.state.scale;
+          const newScale = Math.max(
+            0.1,
+            Math.min(
+              10.0,
+              oldScale * (1 + (e.deltaY > 0 ? -scaleFactor : scaleFactor))
+            )
+          );
+
+          this.state.offset.x -=
+            (mousePos.x / oldScale - mousePos.x / newScale) * newScale;
+          this.state.offset.y -=
+            (mousePos.y / oldScale - mousePos.y / newScale) * newScale;
+
+          this.state.scale = newScale;
+          document.getElementById("path-scale-display").textContent =
+            newScale.toFixed(2);
+          this.render();
+        }
+
+        getMousePosition(e) {
+          const rect = this.canvas.getBoundingClientRect();
+          return {
+            x: (e.clientX - rect.left - this.state.offset.x) / this.state.scale,
+            y: (e.clientY - rect.top - this.state.offset.y) / this.state.scale,
+          };
+        }
+
+        startDrag(e) {
+          this.state.isDragging = true;
+          this.state.startDragPos = { x: e.clientX, y: e.clientY };
+          this.state.startDragOffset = { ...this.state.offset };
+          this.canvas.style.cursor = "grabbing";
+        }
+
+        handleDrag(e) {
+          if (!this.state.isDragging) return;
+
+          const deltaX = e.clientX - this.state.startDragPos.x;
+          const deltaY = e.clientY - this.state.startDragPos.y;
+
+          this.state.offset.x = this.state.startDragOffset.x + deltaX;
+          this.state.offset.y = this.state.startDragOffset.y + deltaY;
+
+          this.render();
+        }
+
+        endDrag() {
+          this.state.isDragging = false;
+          this.canvas.style.cursor = "crosshair";
+        }
+
+        zoomIn() {
+          this.state.scale = Math.min(10.0, this.state.scale * 1.2);
+          document.getElementById("path-scale-display").textContent =
+            this.state.scale.toFixed(2);
+          this.render();
+        }
+
+        zoomOut() {
+          this.state.scale = Math.max(0.1, this.state.scale / 1.2);
+          document.getElementById("path-scale-display").textContent =
+            this.state.scale.toFixed(2);
+          this.render();
+        }
+
+        resetView() {
+          this.state.scale = 1.0;
+          this.state.offset = {
+            x: this.canvas.width / 2,
+            y: this.canvas.height / 2,
+          };
+          document.getElementById("path-scale-display").textContent = "1.00";
+          this.render();
+        }
+
+        toggleAddWaypointMode() {
+          this.state.addWaypointMode = !this.state.addWaypointMode;
+          this.canvas.style.cursor = this.state.addWaypointMode
+            ? "crosshair"
+            : "default";
+
+          const btn = document.getElementById("btn-add-waypoint-mode");
+          if (this.state.addWaypointMode) {
+            btn.classList.add("active");
+            btn.innerHTML =
+              '<i class="fas fa-map-marker-alt"></i> 添加模式中...';
+          } else {
+            btn.classList.remove("active");
+            btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> 添加路径点';
+          }
+        }
+
+        loadDemoPath() {
+          this.clearWaypoints();
+
+          // 添加演示路径点
+          const demoPoints = [
+            { x: 2, y: 2, label: "起点" },
+            { x: 5, y: 3, label: "点A" },
+            { x: 8, y: 1, label: "点B" },
+            { x: 6, y: -2, label: "点C" },
+            { x: 3, y: -1, label: "点D" },
+            { x: 1, y: 1, label: "终点" },
+          ];
+
+          demoPoints.forEach((point) => {
+            this.addWaypoint(point.x, point.y, point.label);
+          });
+
+          setTimeout(() => {
+            this.planPath();
+          }, 500);
+        }
+      }
+
+      // 全局变量
+      let pathPlanningSystem;
+
+      // SocketIO 路径规划事件处理
+      socket.on("path_waypoint_added", function (waypoint) {
+        if (pathPlanningSystem) {
+          pathPlanningSystem.updateWaypointList();
+        }
+      });
+
+      socket.on("path_waypoints_cleared", function () {
+        if (pathPlanningSystem) {
+          pathPlanningSystem.waypoints = [];
+          pathPlanningSystem.plannedPath = [];
+          pathPlanningSystem.render();
+          pathPlanningSystem.updateWaypointList();
+        }
+      });
+
+      socket.on("path_planned", function (pathData) {
+        if (pathPlanningSystem) {
+          pathPlanningSystem.visualizePath(pathData);
+          showNotification("路径规划完成", "success");
+        }
+      });
+
+      socket.on("path_planning_error", function (data) {
+        showNotification(`路径规划错误: ${data.message}`, "error");
+      });
+
+      socket.on("path_execution_started", function (data) {
+        document.getElementById("path-execution-status").innerHTML = `
+        <div>状态: <span style="color: #27ae60;">执行中</span></div>
+        <div>进度: <span id="path-progress">0</span>/<span id="path-total">${data.total_points}</span></div>
+    `;
+        showNotification("路径执行开始", "success");
+      });
+
+      socket.on("path_point_reached", function (data) {
+        document.getElementById("path-progress").textContent = data.point_index;
+      });
+
+      socket.on("path_execution_complete", function (data) {
+        document.getElementById("path-execution-status").innerHTML = `
+        <div>状态: <span style="color: #3498db;">已完成</span></div>
+        <div>进度: <span id="path-progress">${data.total_points}</span>/<span id="path-total">${data.total_points}</span></div>
+    `;
+        showNotification("路径执行完成", "success");
+      });
+      // 在地图数据接收处添加调试
+      socket.on("map_data", function (data) {
+        console.log("📨 收到地图数据！", data);
+        console.log(
+          "地图尺寸:",
+          data.metadata.width,
+          "x",
+          data.metadata.height
+        );
+        console.log("数据长度:", data.data.length);
+
+        // 统计数据
+        let free = 0,
+          occupied = 0,
+          unknown = 0;
+        for (let i = 0; i < Math.min(100, data.data.length); i++) {
+          if (data.data[i] === 0) free++;
+          else if (data.data[i] === 100) occupied++;
+          else if (data.data[i] === -1) unknown++;
+        }
+        console.log(
+          "数据样本分布 - 空闲:",
+          free,
+          "障碍:",
+          occupied,
+          "未知:",
+          unknown
+        );
+
+        if (mapSystem) {
+          console.log("🔄 设置地图数据到mapSystem...");
+          mapSystem.state.mapData = data;
+          mapSystem.updateMapParameters(data.metadata);
+          mapSystem.render();
+          console.log("✅ 地图渲染完成");
+        } else {
+          console.log("❌ mapSystem未初始化");
+        }
+      });
+      socket.on("path_execution_stopped", function (data) {
+        document.getElementById("path-execution-status").innerHTML = `
+        <div>状态: <span style="color: #e74c3c;">已停止</span></div>
+        <div>进度: <span id="path-progress">${data.completed_points}</span>/<span id="path-total">0</span></div>
+    `;
+        showNotification("路径执行已停止", "warning");
+      });
+
+      // 初始化路径规划系统
+      function initPathPlanningSystem() {
+        pathPlanningSystem = new PathPlanningSystem("path-planning-canvas");
+
+        // 绑定按钮事件
+        document
+          .getElementById("btn-add-waypoint-mode")
+          .addEventListener("click", function () {
+            pathPlanningSystem.toggleAddWaypointMode();
+          });
+
+        document
+          .getElementById("btn-clear-waypoints")
+          .addEventListener("click", function () {
+            if (confirm("确定要清空所有路径点吗？")) {
+              pathPlanningSystem.clearWaypoints();
+            }
+          });
+
+        document
+          .getElementById("btn-plan-path")
+          .addEventListener("click", function () {
+            pathPlanningSystem.planPath();
+          });
+
+        document
+          .getElementById("btn-start-path")
+          .addEventListener("click", function () {
+            socket.emit("start_path_execution");
+          });
+
+        document
+          .getElementById("btn-stop-path")
+          .addEventListener("click", function () {
+            socket.emit("stop_path_execution");
+          });
+
+        document
+          .getElementById("btn-load-demo")
+          .addEventListener("click", function () {
+            pathPlanningSystem.loadDemoPath();
+          });
+
+        // 初始加载路径点
+        socket.emit("get_path_waypoints");
+      }
+
+      // 在页面加载时初始化
+      window.addEventListener("load", function () {
+        // ... 其他初始化代码 ...
+        initPathPlanningSystem();
+      });
+
+      // 工具函数
+      function showNotification(message, type = "info") {
+        // 简单的通知实现
+        const notification = document.createElement("div");
+        notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        border-radius: 5px;
+        color: white;
+        z-index: 1000;
+        font-weight: bold;
+        transition: opacity 0.3s;
+    `;
+
+        if (type === "success") {
+          notification.style.background = "#27ae60";
+        } else if (type === "error") {
+          notification.style.background = "#e74c3c";
+        } else if (type === "warning") {
+          notification.style.background = "#f39c12";
+        } else {
+          notification.style.background = "#3498db";
+        }
+
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+          notification.style.opacity = "0";
+          setTimeout(() => {
+            document.body.removeChild(notification);
+          }, 300);
+        }, 3000);
+      }
+    </script>
+  </body>
+</html>
